@@ -62,13 +62,13 @@ def _v(m: Optional[Measure]) -> Optional[float]:
     return None if m is None else float(m.value)
 
 
-REGION_TEXT = {
-    "low": ("80-200 Hz", "chest and proximity effect", 120.0),
-    "low_mid": ("200-500 Hz", "warmth, or boxiness when too much", 300.0),
-    "mid": ("500 Hz-2 kHz", "body of the vowels, nasal or honky when too much", 1000.0),
-    "presence": ("2-5 kHz", "presence and clarity, harsh when too much", 3200.0),
-    "sibilance": ("5-10 kHz", "S-sounds and edge", 7000.0),
-    "air": ("10-16 kHz", "air and sheen", 12000.0),
+REGION_TEXT = {  # range, short name used in sentences, centre frequency
+    "low": ("80-200 Hz", "chest (proximity effect)", 120.0),
+    "low_mid": ("200-500 Hz", "warmth (boxy when overdone)", 300.0),
+    "mid": ("500 Hz-2 kHz", "midrange (nasal or honky when overdone)", 1000.0),
+    "presence": ("2-5 kHz", "presence (harsh when overdone)", 3200.0),
+    "sibilance": ("5-10 kHz", "edge and S-sounds", 7000.0),
+    "air": ("10-16 kHz", "air", 12000.0),
 }
 
 NOTE_VALUES = [  # (name, length in beats)
@@ -287,12 +287,14 @@ def _space_abs(p: VocalProfile) -> list[Advice]:
                 "The vocal is dry and intimate. If you use reverb, keep it very low or short (a small room or short plate under 1 s) so it is felt rather than heard.",
                 f"Tail level {tl:.0f} dB.", _conf(p.tail_level_db)))
         else:
-            kind = "a room or short plate" if (rt or 0) < 0.9 else "a plate" if (rt or 0) < 1.8 else "a hall or long plate"
+            if rt is not None and p.rt60_s.confidence < 0.2:
+                rt = None  # the repeats of a delay make the decay unreliable
+            kind = "a plate" if rt is None else "a room or short plate" if rt < 0.9 else "a plate" if rt < 1.8 else "a hall or long plate"
             pre = ""
             if bpm:
                 pre = f" Pre-delay about {60000 / bpm / 16:.0f} ms (a 1/64 note at {bpm:.0f} BPM) keeps the words clear."
             width = " The tail is wide (stereo)." if ts is not None and ts > LIMITS["wide_tail_side"] else ""
-            rt_txt = f"decay about {rt:.1f} s" if rt else "decay not measurable"
+            rt_txt = f"decay about {rt:.1f} s" if rt else ("decay unclear because of the delay" if p.delay_ms is not None else "decay not measurable")
             adv.append(Advice(STAGE_MIX, "Reverb", "Audible reverb",
                 f"Use {kind} ({rt_txt}) on a send.{pre}{width} Cut the reverb return below ~300 Hz and above ~8 kHz so it does not muddy the vocal.",
                 f"Tail level {tl:.0f} dB" + (f", decay {rt:.1f} s" if rt else "") + ".", _conf(p.tail_level_db, p.rt60_s)))
@@ -351,9 +353,8 @@ def compare(ref: VocalProfile, own: VocalProfile) -> list[Advice]:
         kind = "high shelf" if name == "air" else "low shelf or bell" if name == "low" else "wide bell (Q ~1)"
         verb = "Boost" if g > 0 else "Cut"
         adv.append(Advice(STAGE_MIX, "EQ", f"{verb} {rng}",
-            f"{verb} about {abs(g):.1f} dB around {fc/1000:.1f} kHz ({kind}). Your vocal has {'less' if d > 0 else 'more'} {what} than the reference."
-            if fc >= 1000 else
-            f"{verb} about {abs(g):.1f} dB around {fc:.0f} Hz ({kind}). Your vocal has {'less' if d > 0 else 'more'} {what} than the reference.",
+            (f"{verb} about {abs(g):.1f} dB around " + (f"{fc/1000:.1f} kHz" if fc >= 1000 else f"{fc:.0f} Hz")
+             + f" ({kind}). Compared with the reference, your vocal has {'too little' if d > 0 else 'too much'} {what}."),
             f"{rng}: reference {ref.regions_db[name]:+.1f} dB, yours {own.regions_db[name]:+.1f} dB.",
             _conf(ref.tilt_db_per_oct, own.tilt_db_per_oct, base=0.8)))
 
@@ -450,4 +451,10 @@ def compare(ref: VocalProfile, own: VocalProfile) -> list[Advice]:
     if not adv:
         adv.append(Advice(STAGE_MIX, "Overall", "Already close",
             "No clear differences were found between your vocal and the reference.", "", "medium"))
+        return adv
+    # how the reference was probably recorded, where the comparison said nothing
+    have = {a.area for a in adv if a.stage == STAGE_REC}
+    for a in describe(ref):
+        if a.stage == STAGE_REC and a.area not in have:
+            adv.append(a)
     return adv
