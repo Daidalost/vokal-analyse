@@ -82,7 +82,7 @@ def note_value(ms: float, bpm: Optional[float]) -> Optional[str]:
         return None
     beat = 60000.0 / bpm
     best = min(NOTE_VALUES, key=lambda nv: abs(ms - nv[1] * beat) / (nv[1] * beat))
-    if abs(ms - best[1] * beat) / (best[1] * beat) <= 0.06:
+    if abs(ms - best[1] * beat) / (best[1] * beat) <= 0.04:
         return best[0]
     return None
 
@@ -115,6 +115,8 @@ def space_words(p: VocalProfile) -> str:
     tl = _v(p.tail_level_db)
     if tl is None:
         return "unknown"
+    if p.delay_ms is not None and tl >= LIMITS["dry_tail"]:
+        return "delay echoes" + (" and reverb" if p.rt60_s is not None and p.rt60_s.confidence >= 0.2 else "")
     if tl < LIMITS["dry_tail"]:
         return "dry"
     if tl < LIMITS["obvious_tail"]:

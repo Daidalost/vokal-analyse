@@ -150,6 +150,7 @@ def test_describe_reference(dry, music):
     wet = analyse_vocal(S.reverb(c, 2.0, -8.0), SR, music)
     assert any(x.area == "Reverb" and x.title == "Audible reverb" for x in describe(wet))
     assert summary(wet)["Space"] == "clearly audible reverb"
+    assert summary(analyse_vocal(S.delay(c, 375), SR, music))["Space"].startswith("delay echoes")
 
     dry_ref = analyse_vocal(dry, SR, music)
     assert any(x.area == "Room" and x.title == "Record dry" for x in describe(dry_ref))

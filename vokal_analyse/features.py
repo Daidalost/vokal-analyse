@@ -357,7 +357,7 @@ def analyse_vocal(vocal: np.ndarray, sr: float, music: Optional[np.ndarray] = No
     if len(pk) >= 12:
         vals = l50[pk]
         prof.syllable_range_db = Measure(round(float(np.percentile(vals, 90) - np.percentile(vals, 25)), 2),
-                                         float(np.clip(len(pk) / 60, 0.3, 0.8)))
+                                         float(np.clip(len(pk) / 60, 0.3, 0.8)) * (0.6 if prof.delay_ms is not None else 1.0))
     l400 = db(frame_rms(kw, sr, 0.4, 0.1))
     a400, _ = _activity(l400, 20.0)
     if a400.sum() > 8:
